@@ -174,7 +174,9 @@ class FishingAgent:
     def bait_hook(self):
         bait_location = cv.matchTemplate(self.main_agent.cur_img, self.bait_target, cv.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv.minMaxLoc(bait_location)
-        self.bait_location = max_loc
+        bait_w, bait_h = self.bait_target.shape[1], self.bait_target.shape[0]
+        bait_mid_x, bait_mid_y = bait_w // 2, bait_h // 2
+        self.bait_location = (max_loc[0] + bait_mid_x, max_loc[1] + bait_mid_y)
         self.move_to_bait()
 
     def move_to_bait(self):
@@ -203,7 +205,7 @@ class FishingAgent:
         if self.pole_location:
             pyautogui.moveTo(self.pole_location[0], self.pole_location[1], .45, pyautogui.easeOutQuad)
             pyautogui.leftClick()
-            print("Left click performed. Waiting for 6 seconds...")
+            print("Baiting hook...")
             time.sleep(6)  # schedule cast_lure to run after 6 seconds
         else:
             print("Warning: Attempted to move to pole_location, but pole_location is None (fishing_agent.py line 32)")
