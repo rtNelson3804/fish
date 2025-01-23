@@ -53,10 +53,27 @@ class MainAgent:
 class GUI:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Fishing")
+        self.root.title("PPFB v1.1")
 
-        self.text_area = scrolledtext.ScrolledText(self.root, width=50, height=10)
+        self.text_area = scrolledtext.ScrolledText(self.root, width=75, height=15)
         self.text_area.pack()
+        self.text_area.tag_config('center', justify='center')
+        self.text_area.tag_config('bold_underline', font=('Shentox', '12', 'bold underline'))
+        self.text_area.insert(tk.INSERT, """
+*************************************************************************
+""")
+        self.text_area.insert(tk.INSERT, "Primary Pixel Fishing Bot v1.1\n", ('bold_underline', 'center'))
+        self.text_area.insert(tk.INSERT, """
+Deleting unwanted fish is supported through the bait checkbox.
+
+1. Start Screen Capture
+
+2. Start Fishing (5 second delay)
+
+3. Maximize WoW window.                 
+*************************************************************************
+""")
+
 
         self.fps_label = tk.Label(self.root, text="FPS: 0")
         self.fps_label.pack(side=tk.LEFT)
