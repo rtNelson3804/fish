@@ -169,9 +169,172 @@ class FishingAgent:
                 "assets", "pole_target.png"
             )
         )
+        self.clam_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "clam_target.png"
+            )
+        )
+        self.yellowtail_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "yellowtail_target.png"
+            )
+        )
+        self.yes_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "yes_target.png"
+            )
+        )
+        self.mightfish_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "mightfish_target.png"
+            )
+        )
+        self.cod_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "cod_target.png"
+            )
+        )
         self.fishing_thread = None
 
     def bait_hook(self):
+        # Initialize a set to store the clicked locations
+        clicked_locations = set()
+        # Find the clam_target image on the screen
+        print("Opening Bags...")
+        pyautogui.press('b')
+        time.sleep(1)
+        print("Clearing bags...")
+        # Finding Images for bag cleanup
+        clams = cv.matchTemplate(self.main_agent.cur_img, self.clam_target, cv.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(clams)
+        yellowtails = cv.matchTemplate(self.main_agent.cur_img, self.yellowtail_target, cv.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yellowtails)
+        yes_button = cv.matchTemplate(self.main_agent.cur_img, self.yes_target, cv.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yes_button)
+        mightfish = cv.matchTemplate(self.main_agent.cur_img, self.mightfish_target, cv.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(mightfish)
+        cod = cv.matchTemplate(self.main_agent.cur_img, self.cod_target, cv.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(cod)
+        # Get the width and height of the clam_target image
+        clam_w, clam_h = self.clam_target.shape[1], self.clam_target.shape[0]
+        yellowtail_w, yellowtail_h = self.yellowtail_target.shape[1], self.yellowtail_target.shape[0]
+        yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
+        mightfish_w, mightfish_h = self.mightfish_target.shape[1], self.mightfish_target.shape[0]
+        cod_w, cod_h = self.cod_target.shape[1], self.cod_target.shape[0]
+        
+        clam_count = 0
+        yellowtail_count = 0
+        mightfish_count = 0
+        cod_count = 0
+        
+        # Iterate over the locations where the image was found
+        if np.any(clams >= 0.9):
+            for loc in zip(*np.where(clams >= 0.9)[::-1]):
+                # Calculate the center of the image
+                clam_x = loc[0] + clam_w // 2
+                clam_y = loc[1] + clam_h // 2
+            # Check if the location has already been clicked
+                if (clam_x, clam_y) not in clicked_locations:
+                    # Click in the center of the image
+                    pyautogui.moveTo(clam_x, clam_y)
+                    pyautogui.rightClick()
+                    # Add the location to the set of clicked locations
+                    clicked_locations.add((clam_x, clam_y))
+                    time.sleep(1)
+        else:
+            print("No clams found.")
+        print("Clams operation complete.")
+        print("Checking for Yellowtails...")
+        if np.any(yellowtails >= 0.9):
+            for loc in zip(*np.where(yellowtails >= 0.9)[::-1]):
+                # Get the screen width and height
+                screen_width, screen_height = pyautogui.size()
+                
+                # Calculate the center of the screen
+                screen_x = screen_width // 2
+                screen_y = screen_height // 2
+                
+                # Calculate the center of the image
+                yellowtail_x = loc[0] + yellowtail_w // 2
+                yellowtail_y = loc[1] + yellowtail_h // 2
+                
+                # Check if the location has already been clicked
+                if (yellowtail_x, yellowtail_y) not in clicked_locations:
+                    
+                    # Click in the center of the image
+                    pyautogui.moveTo(yellowtail_x, yellowtail_y)
+                    pyautogui.leftClick()
+                    time.sleep(1)
+                    
+                    # Add the location to the set of clicked locations
+                    clicked_locations.add((yellowtail_x, yellowtail_y))
+                    
+                    # Move to center screen.
+                    pyautogui.moveTo(screen_x, screen_y)
+                    pyautogui.leftClick()
+                    time.sleep(1)
+                    yes_button = cv.matchTemplate(self.main_agent.cur_img, self.yes_target, cv.TM_CCOEFF_NORMED)
+                    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yes_button)
+                    yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
+                    # Move to yes button
+                    yes_x = max_loc[0] + yes_w // 2
+                    yes_y = max_loc[1] + yes_h // 2
+                    pyautogui.moveTo(yes_x, yes_y)
+                    pyautogui.leftClick()
+                    time.sleep(1)
+        else:
+            print("No yellowtails found.")
+        print("Yellowtails operation complete...")
+        if np.any(mightfish >= 0.9):
+            for loc in zip(*np.where(mightfish >= 0.9)[::-1]):
+                # Get the screen width and height
+                screen_width, screen_height = pyautogui.size()
+                
+                # Calculate the center of the screen
+                screen_x = screen_width // 2
+                screen_y = screen_height // 2
+                
+                # Calculate the center of the image
+                mightfish_x = loc[0] + mightfish_w // 2
+                mightfish_y = loc[1] + mightfish_h // 2
+                
+                # Check if the location has already been clicked
+                if (mightfish_x, mightfish_y) not in clicked_locations:
+                    
+                    # Click in the center of the image
+                    pyautogui.moveTo(mightfish_x, mightfish_y)
+                    pyautogui.leftClick()
+                    time.sleep(1)
+                    
+                    # Add the location to the set of clicked locations
+                    clicked_locations.add((mightfish_x, mightfish_y))
+                    
+                    # Move to center screen.
+                    pyautogui.moveTo(screen_x, screen_y)
+                    pyautogui.leftClick()
+                    time.sleep(1)
+                    yes_button = cv.matchTemplate(self.main_agent.cur_img, self.yes_target, cv.TM_CCOEFF_NORMED)
+                    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yes_button)
+                    yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
+                    
+                    # Move to yes button
+                    yes_x = max_loc[0] + yes_w // 2
+                    yes_y = max_loc[1] + yes_h // 2
+                    pyautogui.moveTo(yes_x, yes_y)
+                    pyautogui.leftClick()
+                    time.sleep(1)
+        else:
+            print("No mightfish found.")       
+        print(f"{clam_count} clams opened.")
+        print(f"{yellowtail_count} yellowtails deleted.")
+        print(f"{mightfish_count} mightfish deleted.")
+        print(f"Closing Bags...")
+        pyautogui.press('b')
         bait_location = cv.matchTemplate(self.main_agent.cur_img, self.bait_target, cv.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv.minMaxLoc(bait_location)
         bait_w, bait_h = self.bait_target.shape[1], self.bait_target.shape[0]
@@ -257,6 +420,7 @@ class FishingAgent:
     def watch_lure(self):
         time.sleep(0.5)
         pixel_set = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
+        time.sleep(0.5)
         print(f"Final pixel set: {pixel_set[0]}")
         time_start = time.time()
         while True:
@@ -268,7 +432,7 @@ class FishingAgent:
             if (pixel_set[0] + 11) < pixel[0] or (pixel_set[0] - 11) > pixel[0]:
                 print(f"Bite detected! Pixel: {pixel[0]} | Pixel_Set: {pixel_set[0]}")
                 break
-            if time.time() - time_start >= 28:
+            if time.time() - time_start >= 26:
                 print("Didn't see a bite, I'm stupid!")
                 break
         self.pull_line()
