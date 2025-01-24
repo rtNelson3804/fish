@@ -10,8 +10,10 @@ import pyautogui
 import os
 import random
 import threading
+import enum
 
 FPS_REPORT_DELAY = 0.25
+
 
 def get_asset_path(asset_name):
     if getattr(sys, 'frozen', False):
@@ -24,11 +26,6 @@ def get_asset_path(asset_name):
     assets_path = os.path.join(os.path.dirname(executable_path), 'assets')
     asset_path = os.path.join(assets_path, asset_name)
     return asset_path
-
-# # Usage:
-# fishing_target_path = get_asset_path('fishing_target.png')
-# bait_target_path = get_asset_path('bait_target.png')
-# pole_target_path = get_asset_path('pole_target.png')
 
 class TextRedirector:
     def __init__(self, widget, tag="stdout"):
@@ -50,10 +47,20 @@ class MainAgent:
         self.zone = None
         self.time = None
 
+# Define an enumeration for the different states
+class FishingState(enum.Enum):
+    BAIT = 1
+    IDLE = 2
+    CASTING = 3
+    MOVE_TO_LURE = 4
+    WATCH_LURE = 5
+    PULL_LINE = 6
+    TRASH = 7
+
 class GUI:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("PPFB v1.1")
+        self.root.title("PPFB v1.2")
 
         self.text_area = scrolledtext.ScrolledText(self.root, width=75, height=15)
         self.text_area.pack()
@@ -62,7 +69,7 @@ class GUI:
         self.text_area.insert(tk.INSERT, """
 *************************************************************************
 """)
-        self.text_area.insert(tk.INSERT, "Primary's Pixel Fishing Bot v1.1\n", ('bold_underline', 'center'))
+        self.text_area.insert(tk.INSERT, "Primary's Pixel Fishing Bot v1.2\n", ('bold_underline', 'center'))
         self.text_area.insert(tk.INSERT, """
 Select options on the right and set your hotkeys for fishing/lockpicking.
 
@@ -76,6 +83,11 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
 *************************************************************************
 """)
 
+        self.timer_label = tk.Label(self.root, text="Fishing Time: 00:00:00")
+        self.timer_label.pack(side=tk.TOP, anchor=tk.W)
+
+        self.timer_running = False
+        self.start_time = None
 
         self.fps_label = tk.Label(self.root, text="FPS: 0")
         self.fps_label.pack(side=tk.TOP, anchor=tk.W)
@@ -167,12 +179,27 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
             time.sleep(delay)
             cv.waitKey(1)
 
+    def update_timer(self):
+        if self.timer_running:
+            elapsed_time = int(time.time() - self.start_time)
+            hours, remainder = divmod(elapsed_time, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            self.timer_label.config(text=f"Timer: {hours:02}:{minutes:02}:{seconds:02}")
+            # Schedule the method to run again after 1 second
+            self.root.after(1000, self.update_timer)
+
+
     def start_fishing(self):
         print("Starting fishing... 5 seconds...")
         time.sleep(5)
-        self.fishing_agent = FishingAgent(self.main_agent, self.bait_checkbox_var, self.root, self.fishing_key_entry, self.trash_fish_checkbox_var)
+        self.fishing_agent = FishingAgent(self.main_agent, self.bait_checkbox_var, self.root, self.fishing_key_entry, self.trash_fish_checkbox_var, self.pick_lock_key_entry, self.pick_open_boxes_checkbox_var)
         self.fishing_agent_thread = Thread(target=self.fishing_agent.run)
         self.fishing_agent_thread.start()
+
+        # Start the timer
+        self.timer_running = True
+        self.start_time = time.time()
+        self.update_timer()
 
     def stop_all_operations(self):
         def stop_threads():
@@ -186,20 +213,30 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
                 self.fishing_agent.stop_event.set()
                 self.fishing_agent_thread.join()
                 self.fishing_agent_thread = None
+                print()
                 print("Fishing stopped...")
+
                 self.fishing_agent.reset()  # Call the reset method
+
+            # Stop the timer
+            self.timer_running = False
 
         stop_thread = Thread(target=stop_threads)
         stop_thread.start()
 
 class FishingAgent:
-    def __init__(self, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var):
+    def __init__(self, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var, pick_lock_key_entry, pick_open_boxes_checkbox_var):
         self.main_agent = main_agent
+        self.state = FishingState.BAIT
         self.bait_checkbox_var = bait_checkbox_var
         self.root = root
         self.fishing_key_entry = fishing_key_entry
+        self.pick_lock_key_entry = pick_lock_key_entry
         self.trash_fish_checkbox_var = trash_fish_checkbox_var
+        self.pick_open_boxes_checkbox_var = pick_open_boxes_checkbox_var
         self.stop_event = threading.Event()
+        self.casts = 0
+        self.fails = 0
         
         # interpolate here_path to get the path to the fishing target image
         here_path = os.path.dirname(os.path.realpath(__file__))
@@ -263,6 +300,24 @@ class FishingAgent:
                 "assets", "firefin_target.png"
             )
         )
+        self.grouper_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "grouper_target.png"
+            )
+        )
+        self.crate_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "crate_target.png"
+            )
+        )
+        self.chest_target = cv.imread(
+            os.path.join(
+                here_path,
+                "assets", "chest_target.png"
+            )
+        )
         self.fishing_thread = None
 
     def reset(self):
@@ -282,60 +337,66 @@ class FishingAgent:
         self.bait_location = None
     
     def trashing_fish(self):
-            # Initialize a set to store the clicked locations
-            clicked_locations = set()
-            clam_count = 0
-            # Find the clam_target image on the screen
-            print("Opening Bags...")
-            time.sleep(1)
-            pyautogui.press('b')
-            time.sleep(1)
-            print()
-            print("Clearing bags...")
-            time.sleep(1)
-            # Finding Images for bag cleanup
-            clams = cv.matchTemplate(self.main_agent.cur_img, self.clam_target, cv.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(clams)
-            
-            # Get the width and height of the clam_target image
-            clam_w, clam_h = self.clam_target.shape[1], self.clam_target.shape[0]
-            
-            # Iterate over the locations where the image was found
-            if np.any(clams >= 0.9):
-                for loc in zip(*np.where(clams >= 0.9)[::-1]):
+        # Initialize a set to store the clicked locations
+        clicked_locations = set()
+        clam_count = 0
+        # Find the clam_target image on the screen
+        print()
+        print("Opening Bags to clear inventory...")
+        time.sleep(1)
+        pyautogui.press('b')
+        time.sleep(1)
+        print()
+        time.sleep(1)
+
+        click_templates = {
+            'clam': self.clam_target,
+            'crate': self.crate_target,
+        }
+        click_counts = {name: 0 for name in click_templates.keys()}        
+        # Iterate over the locations where the image was found
+        for name, template in click_templates.items():
+            click_result = cv.matchTemplate(self.main_agent.cur_img, template, cv.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(click_result)
+            if np.any(click_result >= 0.9):
+                for loc in zip(*np.where(click_result >= 0.9)[::-1]):
                     # Calculate the center of the image
-                    clam_x = loc[0] + clam_w // 2
-                    clam_y = loc[1] + clam_h // 2
+                    clam_x = loc[0] + self.clam_target.shape[1] // 2
+                    clam_y = loc[1] + self.clam_target.shape[0] // 2
                 # Check if the location has already been clicked
                     if (clam_x, clam_y) not in clicked_locations:
-                        clam_count += 1
+                        click_counts[name] += 1
                         # Click in the center of the image
                         pyautogui.moveTo(clam_x, clam_y)
                         pyautogui.rightClick()
                         # Add the location to the set of clicked locations
-                        clicked_locations.add((clam_x, clam_y))
                         time.sleep(1)
+                        clicked_locations.add((clam_x, clam_y))
 
-            # Define a dictionary with templates and their names
-            templates = {
-                'zesty': self.zesty_target,
-                'yellowtail': self.yellowtail_target,
-                'mightfish': self.mightfish_target,
-                'cod': self.cod_target,
-                'firefin': self.firefin_target
-            }
+        # Define a dictionary with templates and their names
+        templates = {
+            'zesty': self.zesty_target,
+            'yellowtail': self.yellowtail_target,
+            'mightfish': self.mightfish_target,
+            'cod': self.cod_target,
+            'firefin': self.firefin_target,
+            'grouper': self.grouper_target,
+            'chest': self.chest_target
+        }
 
-            # Initialize counters for each type of fish
-            counts = {name: 0 for name in templates.keys()}
+        # Initialize counters for each type of fish
+        counts = {name: 0 for name in templates.keys()}
 
-            # Iterate over the templates
-            for name, template in templates.items():
-                # Find the template on the screen
-                result = cv.matchTemplate(self.main_agent.cur_img, template, cv.TM_CCOEFF_NORMED)
-                min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
-                
-                # If the template is found, perform the actions
-                if np.any(result >= 0.9):
+        # Iterate over the templates
+        for name, template in templates.items():
+            pick_open_boxes = self.pick_open_boxes_checkbox_var.get()
+            # Find the template on the screen
+            result = cv.matchTemplate(self.main_agent.cur_img, template, cv.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
+            lock_key = self.pick_lock_key_entry.get()
+            # If the template is found, perform the actions
+            if np.any(result >= 0.9):
+                if name == 'chest' and pick_open_boxes == 1:
                     for loc in zip(*np.where(result >= 0.9)[::-1]):
                         # Calculate the center of the image
                         x = loc[0] + template.shape[1] // 2
@@ -343,144 +404,144 @@ class FishingAgent:
                         
                         # Check if the location has already been clicked
                         if (x, y) not in clicked_locations:
-                            counts[name] += 1
+                            # counts[name] += 1
                             
                             # Click in the center of the image
+                            pyautogui.press(lock_key)
                             pyautogui.moveTo(x, y)
                             pyautogui.leftClick()
-                            time.sleep(1)
+                            time.sleep(5)
+                            pyautogui.moveTo(x, y)
+                            pyautogui.rightClick()
                             
                             # Add the location to the set of clicked locations
                             clicked_locations.add((x, y))
-                            
-                            # Move to center screen and click
-                            screen_width, screen_height = pyautogui.size()
-                            screen_x = screen_width // 2
-                            screen_y = screen_height // 2
-                            pyautogui.moveTo(screen_x, screen_y)
-                            pyautogui.leftClick()
-                            time.sleep(1)
-                            
-                            # Click the yes button
-                            yes_button = cv.matchTemplate(self.main_agent.cur_img, self.yes_target, cv.TM_CCOEFF_NORMED)
-                            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yes_button)
-                            yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
-                            yes_x = max_loc[0] + yes_w // 2
-                            yes_y = max_loc[1] + yes_h // 2
-                            pyautogui.moveTo(yes_x, yes_y)
-                            pyautogui.leftClick()
-                            time.sleep(1)
-                    clicked_locations = set()
 
-            # Print the total count
-            print()
-            print("-----------------------------------")
-            print(f"Total Clams Opened: {clam_count}")
-            print(f"Total Fish Deleted: {sum(counts.values())}")
-            print("-----------------------------------")
-            time.sleep(1)
+                for loc in zip(*np.where(result >= 0.9)[::-1]):
+                    # Calculate the center of the image
+                    x = loc[0] + template.shape[1] // 2
+                    y = loc[1] + template.shape[0] // 2
+                    
+                    # Check if the location has already been clicked
+                    if (x, y) not in clicked_locations and name != 'chest':
+                        counts[name] += 1
+                        
+                        # Click in the center of the image
+                        pyautogui.moveTo(x, y)
+                        pyautogui.leftClick()
+                        time.sleep(1)
+                        
+                        # Add the location to the set of clicked locations
+                        clicked_locations.add((x, y))
+                        
+                        # Move to center screen and click
+                        screen_width, screen_height = pyautogui.size()
+                        screen_x = screen_width // 2
+                        screen_y = screen_height // 2
+                        pyautogui.moveTo(screen_x, screen_y)
+                        pyautogui.leftClick()
+                        time.sleep(1)
+                        
+                        # Click the yes button
+                        yes_button = cv.matchTemplate(self.main_agent.cur_img, self.yes_target, cv.TM_CCOEFF_NORMED)
+                        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yes_button)
+                        yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
+                        yes_x = max_loc[0] + yes_w // 2
+                        yes_y = max_loc[1] + yes_h // 2
+                        pyautogui.moveTo(yes_x, yes_y)
+                        pyautogui.leftClick()
+                        time.sleep(1)
 
-            print()
-            print(f"Closing Bags...")
-            pyautogui.press('b')
+        # Now, reset the clicked_locations after all templates have been processed
+        clicked_locations = set()
+
+        time.sleep(1)
+
+        print()
+        print(f"Closing Bags...")
+        pyautogui.press('b')
+        self.state = FishingState.BAIT
+        pass
     
     def bait_hook(self):
         while not self.stop_event.is_set():
+            # Check if the state is still BAIT, otherwise exit the loop
+            if self.state != FishingState.BAIT:
+                break
+            print("State: BAIT")
+            # Find bait location
             bait_location = cv.matchTemplate(self.main_agent.cur_img, self.bait_target, cv.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv.minMaxLoc(bait_location)
             bait_w, bait_h = self.bait_target.shape[1], self.bait_target.shape[0]
             bait_mid_x, bait_mid_y = bait_w // 2, bait_h // 2
             self.bait_location = (max_loc[0] + bait_mid_x, max_loc[1] + bait_mid_y)
-            if self.stop_event.is_set():
-                break
-            self.move_to_bait()
 
-    def move_to_bait(self):
-        if self.bait_location:
-            pyautogui.moveTo(self.bait_location[0], self.bait_location[1], .45, pyautogui.easeOutQuad)
-            pyautogui.leftClick()
-            time.sleep(1)
-            self.find_pole()
-        else:
-            print("Warning: Attempted to move to bait_location, but bait_location is None (fishing_agent.py line 32)")
-            return False
-        
-    def find_pole(self):
-        pole_location = cv.matchTemplate(self.main_agent.cur_img, self.pole_target, cv.TM_CCOEFF_NORMED)
-        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(pole_location)
-        
-        # Calculate the middle point of the pole_target image
-        pole_w, pole_h = self.pole_target.shape[1], self.pole_target.shape[0]
-        pole_mid_x, pole_mid_y = pole_w // 2, pole_h // 2
-        
-        # Add the middle point to the max_loc coordinates
-        self.pole_location = (max_loc[0] + pole_mid_x, max_loc[1] + pole_mid_y)
-        self.move_to_pole()
-
-    def move_to_pole(self):
-        if self.pole_location:
-            pyautogui.moveTo(self.pole_location[0], self.pole_location[1], .45, pyautogui.easeOutQuad)
-            pyautogui.leftClick()
-            time.sleep(1)
-            yes_button = cv.matchTemplate(self.main_agent.cur_img, self.yes_target, cv.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yes_button)
-            if np.any(yes_button >= 0.9):
-                yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
-                # Move to yes button
-                yes_x = max_loc[0] + yes_w // 2
-                yes_y = max_loc[1] + yes_h // 2
-                pyautogui.moveTo(yes_x, yes_y)
+            # Move to bait location
+            if self.bait_location:
+                pyautogui.moveTo(self.bait_location[0], self.bait_location[1], .45, pyautogui.easeOutQuad)
                 pyautogui.leftClick()
                 time.sleep(1)
-            time.sleep(5)  # schedule cast_lure to run after 6 seconds
-            self.cast_lure()
-        else:
-            print("Warning: could not find fishing pole... (fishing_agent.py line 388)")
-            return False
+
+                # Find pole location
+                pole_location = cv.matchTemplate(self.main_agent.cur_img, self.pole_target, cv.TM_CCOEFF_NORMED)
+                min_val, max_val, min_loc, max_loc = cv.minMaxLoc(pole_location)
+                pole_w, pole_h = self.pole_target.shape[1], self.pole_target.shape[0]
+                pole_mid_x, pole_mid_y = pole_w // 2, pole_h // 2
+                self.pole_location = (max_loc[0] + pole_mid_x, max_loc[1] + pole_mid_y)
+
+                # Move to pole location
+                if self.pole_location:
+                    pyautogui.moveTo(self.pole_location[0], self.pole_location[1], .45, pyautogui.easeOutQuad)
+                    pyautogui.leftClick()
+                    time.sleep(1)
+
+                    # Click yes button
+                    yes_button = cv.matchTemplate(self.main_agent.cur_img, self.yes_target, cv.TM_CCOEFF_NORMED)
+                    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(yes_button)
+                    if np.any(yes_button >= 0.9):
+                        yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
+                        yes_x = max_loc[0] + yes_w // 2
+                        yes_y = max_loc[1] + yes_h // 2
+                        pyautogui.moveTo(yes_x, yes_y)
+                        pyautogui.leftClick()
+                        time.sleep(1)
+                    self.state = FishingState.IDLE
+                    time.sleep(5)  # schedule cast_lure to run after 6 seconds
+                else:
+                    print("Warning: could not find fishing pole... (fishing_agent.py line 388)")
+            else:
+                print("Warning: Attempted to move to bait_location, but bait_location is None (fishing_agent.py line 32)")
+
+            # If stop_event is set, break the loop
+            if self.stop_event.is_set():
+                break
+
 
 
     def cast_lure(self):
-        fish_bait = self.bait_checkbox_var.get()
-        current_time = time.time()
-        if fish_bait == 1:
-            if not hasattr(self, 'last_bait_hook_time') or current_time - self.last_bait_hook_time >= 610:
-                self.last_bait_hook_time = current_time
-                print("Applying bait...")
-                self.bait_hook()
-            elif current_time - self.last_bait_hook_time >= 610 and fish_bait == 1:  # 600 seconds = 10 minutes
-                self.last_bait_hook_time = current_time
-                print("Reapplying bait...")
-                self.bait_hook()
-            else:
-                print()
-                print("Casting!...")
-                self.fishing = True
-                self.cast_time = time.time()
-                fishing_key = self.fishing_key_entry.get()
-                pyautogui.press(fishing_key)
-                time.sleep(2)
-                self.find_lure()
-        else:
-            print()
-            print("Casting!...")
-            self.fishing = True
-            self.cast_time = time.time()
-            fishing_key = self.fishing_key_entry.get()
-            pyautogui.press(fishing_key)
-            time.sleep(2)
-            self.find_lure()
+        # print("Casting!...")
+        self.casts += 1
+        self.fishing = True
+        self.cast_time = time.time()
+        fishing_key = self.fishing_key_entry.get()
+        pyautogui.press(fishing_key)
+        self.state = FishingState.CASTING
+        time.sleep(2)
+        pass
 
     def find_lure(self):
         start_time = time.time()
         lure_location = cv.matchTemplate(self.main_agent.cur_img, self.fishing_target, cv.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv.minMaxLoc(lure_location)
         self.lure_location = max_loc
-        self.move_to_lure()
+        self.state = FishingState.MOVE_TO_LURE
+        pass
 
     def move_to_lure(self):
         if self.lure_location:
             pyautogui.moveTo(self.lure_location[0] + 25, self.lure_location[1], .45, pyautogui.easeOutQuad)
-            self.watch_lure()
+            self.state = FishingState.WATCH_LURE
+            pass
         else:
             print("Warning: Attempted to move to lure_location, but lure_location is None (fishing_agent.py line 32)")
             return False
@@ -489,53 +550,97 @@ class FishingAgent:
         time.sleep(1.5)
         pixel_set = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
         time_start = time.time()
+        consecutive_matches = 0  # Counter for consecutive matching pixels
+        required_consecutive_matches = 12  # Set your desired threshold here
+        
         while True:
             pixel = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
-            # if pixel_set[0] < 12:
-            #     if pixel[0] > 15:
-            #         print(f"Bite detected! Pixel: {pixel[0]} | Set: {pixel_set[0]}")
-            #         break            
+            
+            # Check if the pixel meets the condition
             if (pixel_set[0] + 11) < pixel[0] or (pixel_set[0] - 11) > pixel[0]:
-                print(f"Bite detected! Pixel: {pixel[0]} | Set: {pixel_set[0]}")
-                break
+                consecutive_matches += 1
+                # print(f"Match {consecutive_matches}/{required_consecutive_matches}: Pixel: {pixel[0]} | Set: {pixel_set[0]}")
+                
+                # If we reach the required consecutive matches, pull the line
+                if consecutive_matches >= required_consecutive_matches:
+                    print(f"State: PULL_LINE: Pixel: {pixel[0]} | Set: {pixel_set[0]} | {consecutive_matches}/{required_consecutive_matches} matches.")
+                    break
+            else:
+                consecutive_matches = 0  # Reset counter if the condition fails
+            
+            # If the timeout occurs, break the loop
             if time.time() - time_start >= 26:
-                print("Failed to see a bite...")
+                print("State: PULL_LINE - Failed to see a bite...")
+                self.fails += 1
                 break
+            
             time.sleep(0.01)  # Add a 10ms delay
-        self.pull_line()
+
+        self.state = FishingState.PULL_LINE
+        pass
+
 
     def pull_line(self):
         pyautogui.rightClick()
-        time.sleep(1)
-        trash_fish = self.trash_fish_checkbox_var.get()
-        current_time = time.time()
-        if trash_fish == 1:
-            if not hasattr(self, 'last_trash_fish_time') or current_time - self.last_trash_fish_time >= 1800:
-                print()
-                print("Deleting Fish...")
-                self.last_trash_fish_time = current_time
-                self.trashing_fish()
         time.sleep(1)
         screen_width, screen_height = pyautogui.size()
         screen_x = screen_width // 2
         screen_y = screen_height // 2
         pyautogui.moveTo(screen_x, screen_y)
-        self.run()
+        self.state = FishingState.TRASH
+        pass
 
     def run(self):
-        if self.main_agent.cur_img is None:
-            print("Image capture not found!  Did you start the screen capture thread?")
-            return
-        # pyautogui.keyDown('shift') # For switching hotbars if needed.
-        # pyautogui.press('2')
-        # pyautogui.keyUp('shift')
-        randtime = random.randint(1,3)
-        time.sleep(randtime)
-        
         while not self.stop_event.is_set():
-            self.cast_lure()
-            if self.stop_event.is_set():
-                break
+            current_time = time.time()
+            fish_bait = self.bait_checkbox_var.get()
+            trash_fish = self.trash_fish_checkbox_var.get()
+            if self.state == FishingState.BAIT and fish_bait == 1:
+                current_time = time.time()
+                if not hasattr(self, 'last_bait_hook_time') or current_time - self.last_bait_hook_time >= 610:
+                    self.last_bait_hook_time = current_time
+                    self.bait_hook()
+                else:
+                    self.state = FishingState.IDLE
+            elif self.state == FishingState.BAIT and fish_bait == 0:
+                self.state = FishingState.IDLE    
+            elif self.state == FishingState.IDLE:
+                self.cast_lure()
+            elif self.state == FishingState.CASTING:
+                print()
+                print(f"State: CASTING #{self.casts}")
+                self.find_lure()                
+            elif self.state == FishingState.MOVE_TO_LURE:
+                self.move_to_lure()
+            elif self.state == FishingState.WATCH_LURE:
+                print("State: WATCH_LURE")
+                self.watch_lure()                
+            elif self.state == FishingState.PULL_LINE:
+                self.pull_line()
+            elif self.state == FishingState.TRASH and trash_fish == 1:
+                if not hasattr(self, 'last_trash_fish_time') or current_time - self.last_trash_fish_time >= 1800:
+                    print("State: TRASH")
+                    self.last_trash_fish_time = current_time
+                    self.trashing_fish()
+                    print()
+                    print("-----------------------------------")
+                    print(f"Total Casts: {self.casts}")
+                    print(f"Total Fails: {self.fails}")
+                    print(f"Percent Fails: {round((self.fails / self.casts) * 100, 2)}%")
+                    print("-----------------------------------")
+                    print()
+                else:
+                    print()
+                    print("-----------------------------------")
+                    print(f"Total Casts: {self.casts}")
+                    print(f"Total Fails: {self.fails}")
+                    print(f"Percent Fails: {round((self.fails / self.casts) * 100, 2)}%")
+                    print("-----------------------------------")
+                    print()
+                    self.state = FishingState.BAIT
+            elif self.state == FishingState.TRASH and trash_fish == 0:
+                self.state = FishingState.BAIT
+        time.sleep(0.1)  # Add a delay to avoid overwhelming the system
 
 if __name__ == "__main__":
     gui = GUI()
