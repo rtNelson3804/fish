@@ -99,6 +99,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         self.trash_fish_checkbox = tk.Checkbutton(checkbox_frame, text="Trash Fish", variable=self.trash_fish_checkbox_var)
         self.trash_fish_checkbox.pack(side=tk.TOP)
 
+
         self.bait_checkbox_var = tk.IntVar(value=1)
         self.bait_checkbox = tk.Checkbutton(checkbox_frame, text="Bait", variable=self.bait_checkbox_var)
         self.bait_checkbox.pack(side=tk.TOP)
@@ -125,6 +126,15 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         self.fishing_key_entry = tk.Entry(fishing_key_frame, width=2)
         self.fishing_key_entry.insert(0, "1")  # default value
         self.fishing_key_entry.pack(side=tk.LEFT)
+
+        trash_delay_frame = tk.Frame(input_frame)
+        trash_delay_frame.pack(side=tk.BOTTOM, anchor=tk.W)
+
+        tk.Label(trash_delay_frame, text="Bag Cleaning Delay:").pack(side=tk.LEFT)
+        tk.Label(trash_delay_frame, text="minutes").pack(side=tk.RIGHT)
+        self.trash_delay_frame_entry = tk.Entry(trash_delay_frame, width=3)
+        self.trash_delay_frame_entry.insert(0, "10")  # default value
+        self.trash_delay_frame_entry.pack(side=tk.LEFT)
 
         # Redirect print statements to the text area
         sys.stdout = TextRedirector(self.text_area, tag="stdout")
@@ -192,7 +202,10 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
     def start_fishing(self):
         print("Starting fishing... 5 seconds...")
         time.sleep(5)
-        self.fishing_agent = FishingAgent(self.main_agent, self.bait_checkbox_var, self.root, self.fishing_key_entry, self.trash_fish_checkbox_var, self.pick_lock_key_entry, self.pick_open_boxes_checkbox_var)
+        self.fishing_agent = FishingAgent(self.main_agent, self.bait_checkbox_var, self.root, self.fishing_key_entry, 
+                                          self.trash_fish_checkbox_var, self.pick_lock_key_entry, self.pick_open_boxes_checkbox_var,
+                                          self.trash_delay_frame_entry
+                                          )
         self.fishing_agent_thread = Thread(target=self.fishing_agent.run)
         self.fishing_agent_thread.start()
 
@@ -207,6 +220,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
                 self.main_agent.stop_event = True
                 self.screen_capture_thread.join()
                 self.screen_capture_thread = None
+                print()
                 print("Screen capture stopped...")
 
             if self.fishing_agent_thread:
@@ -225,13 +239,14 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         stop_thread.start()
 
 class FishingAgent:
-    def __init__(self, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var, pick_lock_key_entry, pick_open_boxes_checkbox_var):
+    def __init__(self, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var, pick_lock_key_entry, pick_open_boxes_checkbox_var, trash_delay_frame_entry):
         self.main_agent = main_agent
         self.state = FishingState.BAIT
         self.bait_checkbox_var = bait_checkbox_var
         self.root = root
         self.fishing_key_entry = fishing_key_entry
         self.pick_lock_key_entry = pick_lock_key_entry
+        self.trash_delay_frame_entry = trash_delay_frame_entry
         self.trash_fish_checkbox_var = trash_fish_checkbox_var
         self.pick_open_boxes_checkbox_var = pick_open_boxes_checkbox_var
         self.stop_event = threading.Event()
@@ -508,9 +523,9 @@ class FishingAgent:
                     self.state = FishingState.IDLE
                     time.sleep(5)  # schedule cast_lure to run after 6 seconds
                 else:
-                    print("Warning: could not find fishing pole... (fishing_agent.py line 388)")
+                    print("Warning: could not find fishing pole...")
             else:
-                print("Warning: Attempted to move to bait_location, but bait_location is None (fishing_agent.py line 32)")
+                print("Warning: Attempted to move to bait_location, but bait_location is None")
 
             # If stop_event is set, break the loop
             if self.stop_event.is_set():
@@ -526,7 +541,7 @@ class FishingAgent:
         fishing_key = self.fishing_key_entry.get()
         pyautogui.press(fishing_key)
         self.state = FishingState.CASTING
-        time.sleep(2)
+        time.sleep(1)
         pass
 
     def find_lure(self):
@@ -538,49 +553,59 @@ class FishingAgent:
         pass
 
     def move_to_lure(self):
-        if self.lure_location:
-            pyautogui.moveTo(self.lure_location[0] + 25, self.lure_location[1], .45, pyautogui.easeOutQuad)
-            self.state = FishingState.WATCH_LURE
-            pass
+        while not self.stop_event.is_set():    
+            if self.lure_location:
+                pyautogui.moveTo(self.lure_location[0] + 25, self.lure_location[1], .45, pyautogui.easeOutQuad)
+                self.state = FishingState.WATCH_LURE
+                break
+            else:
+                print("Warning: Attempted to move to lure_location, but lure_location is None (fishing_agent.py line 32)")
+                break
+            time.sleep(0.01)  # Add a 10ms delay
         else:
-            print("Warning: Attempted to move to lure_location, but lure_location is None (fishing_agent.py line 32)")
-            return False
+            pass
 
     def watch_lure(self):
-        time.sleep(1.5)
-        pixel_set = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
-        time_start = time.time()
-        consecutive_matches = 0  # Counter for consecutive matching pixels
-        required_consecutive_matches = 12  # Set your desired threshold here
-        
-        while True:
-            pixel = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
+        while not self.stop_event.is_set():
+            time.sleep(1.5)
+            pixel_set = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
+            time_start = time.time()
+            consecutive_matches = 0  # Counter for consecutive matching pixels
+            required_consecutive_matches = 12  # Set your desired threshold here
             
-            # Check if the pixel meets the condition
-            if (pixel_set[0] + 11) < pixel[0] or (pixel_set[0] - 11) > pixel[0]:
-                consecutive_matches += 1
-                # print(f"Match {consecutive_matches}/{required_consecutive_matches}: Pixel: {pixel[0]} | Set: {pixel_set[0]}")
+            while not self.stop_event.is_set():
+                pixel = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
                 
-                # If we reach the required consecutive matches, pull the line
-                if consecutive_matches >= required_consecutive_matches:
-                    print(f"State: PULL_LINE: Pixel: {pixel[0]} | Set: {pixel_set[0]} | {consecutive_matches}/{required_consecutive_matches} matches.")
+                # Check if the pixel meets the condition
+                if (pixel_set[0] + 11) < pixel[0] or (pixel_set[0] - 11) > pixel[0]:
+                    consecutive_matches += 1
+                    # print(f"Match {consecutive_matches}/{required_consecutive_matches}: Pixel: {pixel[0]} | Set: {pixel_set[0]}")
+                    
+                    # If we reach the required consecutive matches, pull the line
+                    if consecutive_matches >= required_consecutive_matches:
+                        print(f"State: PULL_LINE: Pixel: {pixel[0]} | Set: {pixel_set[0]} | {consecutive_matches}/{required_consecutive_matches} matches.")
+                        bite_detected = True
+                        break
+                else:
+                    consecutive_matches = 0  # Reset counter if the condition fails
+                
+                # If the timeout occurs, break the loop
+                if time.time() - time_start >= 26:
+                    print("State: PULL_LINE - Failed to see a bite...")
+                    self.fails += 1
+                    bite_detected = True
                     break
-            else:
-                consecutive_matches = 0  # Reset counter if the condition fails
+                time.sleep(0.01)  # Add a 10ms delay
             
-            # If the timeout occurs, break the loop
-            if time.time() - time_start >= 26:
-                print("State: PULL_LINE - Failed to see a bite...")
-                self.fails += 1
+            self.state = FishingState.PULL_LINE
+
+            if self.state == FishingState.PULL_LINE:
                 break
-            
-            time.sleep(0.01)  # Add a 10ms delay
-
-        self.state = FishingState.PULL_LINE
-        pass
-
+        else:
+            pass        
 
     def pull_line(self):
+        # pyautogui.moveTo(self.lure_location[0] + 25, self.lure_location[1], .45, pyautogui.easeOutQuad) # Uncomment this if you want the mouse to move to lure just before clicking
         pyautogui.rightClick()
         time.sleep(1)
         screen_width, screen_height = pyautogui.size()
@@ -595,6 +620,7 @@ class FishingAgent:
             current_time = time.time()
             fish_bait = self.bait_checkbox_var.get()
             trash_fish = self.trash_fish_checkbox_var.get()
+            trash_delay = int(self.trash_delay_frame_entry.get())
             if self.state == FishingState.BAIT and fish_bait == 1:
                 current_time = time.time()
                 if not hasattr(self, 'last_bait_hook_time') or current_time - self.last_bait_hook_time >= 610:
@@ -618,7 +644,7 @@ class FishingAgent:
             elif self.state == FishingState.PULL_LINE:
                 self.pull_line()
             elif self.state == FishingState.TRASH and trash_fish == 1:
-                if not hasattr(self, 'last_trash_fish_time') or current_time - self.last_trash_fish_time >= 1800:
+                if not hasattr(self, 'last_trash_fish_time') or current_time - self.last_trash_fish_time >= (trash_delay * 60):
                     print("State: TRASH")
                     self.last_trash_fish_time = current_time
                     self.trashing_fish()
