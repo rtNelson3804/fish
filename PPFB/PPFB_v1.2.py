@@ -8,12 +8,11 @@ import cv2 as cv
 import numpy as np
 import pyautogui
 import os
-import random
 import threading
 import enum
+import random
 
 FPS_REPORT_DELAY = 0.25
-
 
 def get_asset_path(asset_name):
     if getattr(sys, 'frozen', False):
@@ -95,16 +94,20 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         checkbox_frame = tk.Frame(self.root)
         checkbox_frame.pack(side=tk.RIGHT)
 
+        self.human_mouse_checkbox_var = tk.IntVar(value=1)
+        self.human_mouse_checkbox = tk.Checkbutton(checkbox_frame, text="Human Mouse", variable=self.human_mouse_checkbox_var)
+        self.human_mouse_checkbox.pack(side=tk.TOP)
+
         self.trash_fish_checkbox_var = tk.IntVar(value=1)
         self.trash_fish_checkbox = tk.Checkbutton(checkbox_frame, text="Trash Fish", variable=self.trash_fish_checkbox_var)
         self.trash_fish_checkbox.pack(side=tk.TOP)
 
 
-        self.bait_checkbox_var = tk.IntVar(value=1)
+        self.bait_checkbox_var = tk.IntVar(value=0)
         self.bait_checkbox = tk.Checkbutton(checkbox_frame, text="Bait", variable=self.bait_checkbox_var)
         self.bait_checkbox.pack(side=tk.TOP)
 
-        self.pick_open_boxes_checkbox_var = tk.IntVar(value=0)
+        self.pick_open_boxes_checkbox_var = tk.IntVar(value=1)
         self.pick_open_boxes_checkbox = tk.Checkbutton(checkbox_frame, text="Pick/Open Boxes", variable=self.pick_open_boxes_checkbox_var)
         self.pick_open_boxes_checkbox.pack(side=tk.TOP)
 
@@ -116,7 +119,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
 
         tk.Label(pick_lock_key_frame, text="Pick Lock Key:").pack(side=tk.LEFT, anchor=tk.W)
         self.pick_lock_key_entry = tk.Entry(pick_lock_key_frame, width=2)
-        self.pick_lock_key_entry.insert(0, "2")  # default value
+        self.pick_lock_key_entry.insert(0, "]")  # default value
         self.pick_lock_key_entry.pack(side=tk.LEFT)
 
         fishing_key_frame = tk.Frame(input_frame)
@@ -124,7 +127,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
 
         tk.Label(fishing_key_frame, text="Fishing Key:").pack(side=tk.LEFT)
         self.fishing_key_entry = tk.Entry(fishing_key_frame, width=2)
-        self.fishing_key_entry.insert(0, "1")  # default value
+        self.fishing_key_entry.insert(0, "[")  # default value
         self.fishing_key_entry.pack(side=tk.LEFT)
 
         trash_delay_frame = tk.Frame(input_frame)
@@ -133,7 +136,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         tk.Label(trash_delay_frame, text="Bag Cleaning Delay:").pack(side=tk.LEFT)
         tk.Label(trash_delay_frame, text="minutes").pack(side=tk.RIGHT)
         self.trash_delay_frame_entry = tk.Entry(trash_delay_frame, width=3)
-        self.trash_delay_frame_entry.insert(0, "10")  # default value
+        self.trash_delay_frame_entry.insert(0, "8")  # default value
         self.trash_delay_frame_entry.pack(side=tk.LEFT)
 
         # Redirect print statements to the text area
@@ -200,11 +203,25 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
 
 
     def start_fishing(self):
-        print("Starting fishing... 5 seconds...")
-        time.sleep(5)
+        print("\nStarting fishing... 15 seconds...")
+        self.root.after(5000, self.five_seconds_left)
+        
+    def five_seconds_left(self):
+        print("\n10 seconds...")
+        self.root.after(5000, self.two_seconds_left)
+
+    def two_seconds_left(self):
+        print("\n5 seconds...")
+        self.root.after(3000, self.one_second_left)
+
+    def one_second_left(self):
+        print("\nReady, Steady, GO!")
+        self.initialize_fishing_agent()
+        
+    def initialize_fishing_agent(self):
         self.fishing_agent = FishingAgent(self.main_agent, self.bait_checkbox_var, self.root, self.fishing_key_entry, 
                                           self.trash_fish_checkbox_var, self.pick_lock_key_entry, self.pick_open_boxes_checkbox_var,
-                                          self.trash_delay_frame_entry
+                                          self.trash_delay_frame_entry, self.human_mouse_checkbox_var
                                           )
         self.fishing_agent_thread = Thread(target=self.fishing_agent.run)
         self.fishing_agent_thread.start()
@@ -230,7 +247,13 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
                 print()
                 print("Fishing stopped...")
 
-                self.fishing_agent.reset()  # Call the reset method
+                self.main_agent.stop_event = False
+                if self.fishing_agent:
+                    self.fishing_agent.stop_event.clear()
+                time.sleep(1)
+                print("\nReady to resume...")
+
+                # self.fishing_agent.reset()  # Call the reset method
 
             # Stop the timer
             self.timer_running = False
@@ -238,8 +261,72 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         stop_thread = Thread(target=stop_threads)
         stop_thread.start()
 
+def mouse_operation(start=None, end=None, click=None, steps=7, max_jitter=3, base_duration=0.4):
+
+    # if self.human_mouse_checkbox_var == 0:
+    #     pyautogui.moveTo(end[0], end[1], duration=0.1)  # Move directly to the target
+    #     if click:
+    #         pyautogui.click(button=click)
+    #     return
+    
+    # Get current mouse position if start or end is None
+    if start is None and end is None:
+        start = pyautogui.position()
+        end = pyautogui.position()
+    elif start is None:
+        start = pyautogui.position()
+    elif end is None:
+        end = start
+
+    # If start and end are the same, no need to move, just click if specified
+    if start == end:
+        if click:
+            delay = random.uniform(0.1, 0.05)  # Random delay
+            time.sleep(delay)
+            if click == "left":
+                pyautogui.click()
+            elif click == "right":
+                pyautogui.click(button="right")
+        return
+
+    # Calculate a random control point for a Bézier curve
+    control_x = (start[0] + end[0]) / 2 + random.randint(-100, 100)
+    control_y = (start[1] + end[1]) / 2 + random.randint(-100, 100)
+
+    # Generate the Bézier curve
+    t = np.linspace(0, 1, steps)
+    x_vals = (1 - t)**2 * start[0] + 2 * (1 - t) * t * control_x + t**2 * end[0]
+    y_vals = (1 - t)**2 * start[1] + 2 * (1 - t) * t * control_y + t**2 * end[1]
+
+    # Move along the path
+    for i in range(steps):
+        # Add jitter to simulate hand movement
+        jitter_x = random.uniform(-max_jitter, max_jitter)
+        jitter_y = random.uniform(-max_jitter, max_jitter)
+
+        # Apply easing function to control movement smoothness
+        duration = base_duration / steps + random.uniform(-0.05, 0.05)  # Vary speed slightly
+        pyautogui.moveTo(x_vals[i] + jitter_x, y_vals[i] + jitter_y, duration=duration, tween=pyautogui.easeInOutQuad)
+
+    # Simulate a slight adjustment at the target
+    adjustment_x = random.randint(-3, 3)
+    adjustment_y = random.randint(-3, 3)
+    pyautogui.moveRel(adjustment_x, adjustment_y, duration=random.uniform(0.01, 0.03))
+
+    # Final move to the exact target position
+    pyautogui.moveTo(end[0], end[1], duration=random.uniform(0.1, 0.3))
+
+    # Perform a click if the `click` parameter is specified
+    if click:
+        delay = random.uniform(0.09, 0.16)  # Random delay between 250ms and 1000ms
+        time.sleep(delay)  # Simulate natural delay before clicking
+        if click == "left":
+            pyautogui.click()
+        elif click == "right":
+            pyautogui.click(button="right")
+
 class FishingAgent:
-    def __init__(self, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var, pick_lock_key_entry, pick_open_boxes_checkbox_var, trash_delay_frame_entry):
+    def __init__(self, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var, pick_lock_key_entry, pick_open_boxes_checkbox_var, trash_delay_frame_entry, human_mouse_checkbox_var):
         self.main_agent = main_agent
         self.state = FishingState.BAIT
         self.bait_checkbox_var = bait_checkbox_var
@@ -334,22 +421,6 @@ class FishingAgent:
             )
         )
         self.fishing_thread = None
-
-    def reset(self):
-        self.main_agent = None
-        self.bait_checkbox_var = None
-        self.root = None
-        self.stop_event = threading.Event()
-        self.fishing_target = None
-        self.bait_target = None
-        self.pole_target = None
-        self.clam_target = None
-        self.yellowtail_target = None
-        self.yes_target = None
-        self.mightfish_target = None
-        self.cod_target = None
-        self.fishing_thread = None
-        self.bait_location = None
     
     def trashing_fish(self):
         # Initialize a set to store the clicked locations
@@ -382,8 +453,7 @@ class FishingAgent:
                     if (clam_x, clam_y) not in clicked_locations:
                         click_counts[name] += 1
                         # Click in the center of the image
-                        pyautogui.moveTo(clam_x, clam_y)
-                        pyautogui.rightClick()
+                        mouse_operation(end=(clam_x, clam_y), click="right")
                         # Add the location to the set of clicked locations
                         time.sleep(1)
                         clicked_locations.add((clam_x, clam_y))
@@ -398,6 +468,12 @@ class FishingAgent:
             'grouper': self.grouper_target,
             'chest': self.chest_target
         }
+
+        def is_nearby(loc, clicked_locations, radius=10):
+            for clicked_x, clicked_y in clicked_locations:
+                if abs(clicked_x - loc[0]) <= radius and abs(clicked_y - loc[1]) <= radius:
+                    return True
+            return False
 
         # Initialize counters for each type of fish
         counts = {name: 0 for name in templates.keys()}
@@ -423,11 +499,9 @@ class FishingAgent:
                             
                             # Click in the center of the image
                             pyautogui.press(lock_key)
-                            pyautogui.moveTo(x, y)
-                            pyautogui.leftClick()
+                            mouse_operation(end=(x, y), click="left")
                             time.sleep(5)
-                            pyautogui.moveTo(x, y)
-                            pyautogui.rightClick()
+                            mouse_operation(end=(x, y), click="right")
                             
                             # Add the location to the set of clicked locations
                             clicked_locations.add((x, y))
@@ -438,12 +512,11 @@ class FishingAgent:
                     y = loc[1] + template.shape[0] // 2
                     
                     # Check if the location has already been clicked
-                    if (x, y) not in clicked_locations and name != 'chest':
+                    if not is_nearby((x, y), clicked_locations) and name != 'chest':
                         counts[name] += 1
                         
                         # Click in the center of the image
-                        pyautogui.moveTo(x, y)
-                        pyautogui.leftClick()
+                        mouse_operation(end=(x, y), click="left")
                         time.sleep(1)
                         
                         # Add the location to the set of clicked locations
@@ -453,8 +526,7 @@ class FishingAgent:
                         screen_width, screen_height = pyautogui.size()
                         screen_x = screen_width // 2
                         screen_y = screen_height // 2
-                        pyautogui.moveTo(screen_x, screen_y)
-                        pyautogui.leftClick()
+                        mouse_operation(end=(screen_x, screen_y), click="left")
                         time.sleep(1)
                         
                         # Click the yes button
@@ -463,8 +535,7 @@ class FishingAgent:
                         yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
                         yes_x = max_loc[0] + yes_w // 2
                         yes_y = max_loc[1] + yes_h // 2
-                        pyautogui.moveTo(yes_x, yes_y)
-                        pyautogui.leftClick()
+                        mouse_operation(end=(yes_x, yes_y), click="left")
                         time.sleep(1)
 
         # Now, reset the clicked_locations after all templates have been processed
@@ -483,6 +554,7 @@ class FishingAgent:
             # Check if the state is still BAIT, otherwise exit the loop
             if self.state != FishingState.BAIT:
                 break
+            print()
             print("State: BAIT")
             # Find bait location
             bait_location = cv.matchTemplate(self.main_agent.cur_img, self.bait_target, cv.TM_CCOEFF_NORMED)
@@ -493,8 +565,7 @@ class FishingAgent:
 
             # Move to bait location
             if self.bait_location:
-                pyautogui.moveTo(self.bait_location[0], self.bait_location[1], .45, pyautogui.easeOutQuad)
-                pyautogui.leftClick()
+                mouse_operation(end=(self.bait_location[0], self.bait_location[1]), click="left")
                 time.sleep(1)
 
                 # Find pole location
@@ -506,8 +577,7 @@ class FishingAgent:
 
                 # Move to pole location
                 if self.pole_location:
-                    pyautogui.moveTo(self.pole_location[0], self.pole_location[1], .45, pyautogui.easeOutQuad)
-                    pyautogui.leftClick()
+                    mouse_operation(end=(self.pole_location[0], self.pole_location[1]), click="left")
                     time.sleep(1)
 
                     # Click yes button
@@ -517,8 +587,7 @@ class FishingAgent:
                         yes_w, yes_h = self.yes_target.shape[1], self.yes_target.shape[0]
                         yes_x = max_loc[0] + yes_w // 2
                         yes_y = max_loc[1] + yes_h // 2
-                        pyautogui.moveTo(yes_x, yes_y)
-                        pyautogui.leftClick()
+                        mouse_operation(end=(yes_x, yes_y), click="left")
                         time.sleep(1)
                     self.state = FishingState.IDLE
                     time.sleep(5)  # schedule cast_lure to run after 6 seconds
@@ -555,11 +624,8 @@ class FishingAgent:
     def move_to_lure(self):
         while not self.stop_event.is_set():    
             if self.lure_location:
-                pyautogui.moveTo(self.lure_location[0] + 25, self.lure_location[1], .45, pyautogui.easeOutQuad)
+                mouse_operation(start=None,end=(self.lure_location[0] + 32, self.lure_location[1]))
                 self.state = FishingState.WATCH_LURE
-                break
-            else:
-                print("Warning: Attempted to move to lure_location, but lure_location is None (fishing_agent.py line 32)")
                 break
             time.sleep(0.01)  # Add a 10ms delay
         else:
@@ -571,7 +637,7 @@ class FishingAgent:
             pixel_set = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
             time_start = time.time()
             consecutive_matches = 0  # Counter for consecutive matching pixels
-            required_consecutive_matches = 12  # Set your desired threshold here
+            required_consecutive_matches = 3  # Set your desired threshold here
             
             while not self.stop_event.is_set():
                 pixel = self.main_agent.cur_imgHSV[self.lure_location[1] + 25][self.lure_location[0]]
@@ -605,13 +671,12 @@ class FishingAgent:
             pass        
 
     def pull_line(self):
-        # pyautogui.moveTo(self.lure_location[0] + 25, self.lure_location[1], .45, pyautogui.easeOutQuad) # Uncomment this if you want the mouse to move to lure just before clicking
-        pyautogui.rightClick()
+        mouse_operation(click="right")
         time.sleep(1)
         screen_width, screen_height = pyautogui.size()
         screen_x = screen_width // 2
         screen_y = screen_height // 2
-        pyautogui.moveTo(screen_x, screen_y)
+        mouse_operation(end=(screen_x, screen_y))
         self.state = FishingState.TRASH
         pass
 
