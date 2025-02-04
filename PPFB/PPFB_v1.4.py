@@ -132,8 +132,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         trash_delay_frame = tk.Frame(input_frame)
         trash_delay_frame.pack(side=tk.BOTTOM, anchor=tk.W)
 
-        tk.Label(trash_delay_frame, text="Bag Cleaning Delay:").pack(side=tk.LEFT)
-        tk.Label(trash_delay_frame, text="minutes").pack(side=tk.RIGHT)
+        tk.Label(trash_delay_frame, text="Trash Fish (Minutes):").pack(side=tk.LEFT)
         self.trash_delay_frame_entry = tk.Entry(trash_delay_frame, width=3)
         self.trash_delay_frame_entry.insert(0, "30")  # default value
         self.trash_delay_frame_entry.pack(side=tk.LEFT)
@@ -141,8 +140,8 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         fishing_time_frame = tk.Frame(input_frame)
         fishing_time_frame.pack(side=tk.BOTTOM, anchor=tk.W)
 
-        tk.Label(fishing_time_frame, text="Max Fishing Time:").pack(side=tk.LEFT)
-        tk.Label(fishing_time_frame, text="hours. 0 = Unlimited").pack(side=tk.RIGHT)
+        tk.Label(fishing_time_frame, text="Fishing Time (Hours):").pack(side=tk.LEFT)
+        tk.Label(fishing_time_frame, text=" 0 = Unlimited").pack(side=tk.RIGHT)
         self.fishing_time_frame_entry = tk.Entry(fishing_time_frame, width=3)
         self.fishing_time_frame_entry.insert(0, "6")  # default value
         self.fishing_time_frame_entry.pack(side=tk.LEFT)
@@ -653,7 +652,7 @@ class FishingAgent:
         fishing_key = self.fishing_key_entry.get()
         pyautogui.press(fishing_key)
         self.state = FishingState.CASTING
-        time.sleep(1)
+        time.sleep(1.5)
         pass
 
     def find_lure(self):
@@ -703,7 +702,7 @@ class FishingAgent:
 
     def watch_lure(self):
         # Initialize variables
-        time.sleep(1.5)  # Wait briefly before monitoring
+        time.sleep(0.5)  # Wait briefly before monitoring
         if self.lure_location:
             template_width, template_height = self.fishing_target.shape[1], self.fishing_target.shape[0]
         elif self.small_location:
@@ -779,7 +778,7 @@ class FishingAgent:
 
     def pull_line(self):
         self.mouse_operation(click="right")
-        time.sleep(1)
+        time.sleep(1.5)
         # screen_width, screen_height = pyautogui.size()
         # screen_x = screen_width // 2
         # screen_y = screen_height // 2
