@@ -670,7 +670,6 @@ class FishingAgent:
             pass
         elif np.any(small_location >= 0.55):
             # Save the lure's top-left location
-            print("Using 2nd lure image.")
             self.small_location = small_loc
             self.state = FishingState.MOVE_TO_LURE
             pass
