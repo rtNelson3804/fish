@@ -59,7 +59,7 @@ class FishingState(enum.Enum):
 class GUI:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("PPFB v1.2")
+        self.root.title("PPFB v1.3")
 
         self.text_area = scrolledtext.ScrolledText(self.root, width=75, height=15)
         self.text_area.pack()
@@ -68,7 +68,7 @@ class GUI:
         self.text_area.insert(tk.INSERT, """
 *************************************************************************
 """)
-        self.text_area.insert(tk.INSERT, "Primary's Pixel Fishing Bot v1.2\n", ('bold_underline', 'center'))
+        self.text_area.insert(tk.INSERT, "Primary's Pixel Fishing Bot v1.3\n", ('bold_underline', 'center'))
         self.text_area.insert(tk.INSERT, """
 Select options on the right and set your hotkeys for fishing/lockpicking.
 
@@ -94,7 +94,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         checkbox_frame = tk.Frame(self.root)
         checkbox_frame.pack(side=tk.RIGHT)
 
-        self.human_mouse_checkbox_var = tk.IntVar(value=0)
+        self.human_mouse_checkbox_var = tk.IntVar(value=1)
         self.human_mouse_checkbox = tk.Checkbutton(checkbox_frame, text="Human Mouse", variable=self.human_mouse_checkbox_var)
         self.human_mouse_checkbox.pack(side=tk.TOP)
 
@@ -102,11 +102,11 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         self.trash_fish_checkbox = tk.Checkbutton(checkbox_frame, text="Trash Fish", variable=self.trash_fish_checkbox_var)
         self.trash_fish_checkbox.pack(side=tk.TOP)
 
-        self.bait_checkbox_var = tk.IntVar(value=0)
+        self.bait_checkbox_var = tk.IntVar(value=1)
         self.bait_checkbox = tk.Checkbutton(checkbox_frame, text="Bait", variable=self.bait_checkbox_var)
         self.bait_checkbox.pack(side=tk.TOP)
 
-        self.pick_open_boxes_checkbox_var = tk.IntVar(value=1)
+        self.pick_open_boxes_checkbox_var = tk.IntVar(value=0)
         self.pick_open_boxes_checkbox = tk.Checkbutton(checkbox_frame, text="Pick/Open Boxes", variable=self.pick_open_boxes_checkbox_var)
         self.pick_open_boxes_checkbox.pack(side=tk.TOP)
 
@@ -135,7 +135,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
         tk.Label(trash_delay_frame, text="Bag Cleaning Delay:").pack(side=tk.LEFT)
         tk.Label(trash_delay_frame, text="minutes").pack(side=tk.RIGHT)
         self.trash_delay_frame_entry = tk.Entry(trash_delay_frame, width=3)
-        self.trash_delay_frame_entry.insert(0, "8")  # default value
+        self.trash_delay_frame_entry.insert(0, "30")  # default value
         self.trash_delay_frame_entry.pack(side=tk.LEFT)
 
         # Redirect print statements to the text area
@@ -619,15 +619,16 @@ class FishingAgent:
         start_time = time.time()
         lure_location = cv.matchTemplate(self.main_agent.cur_img, self.fishing_target, cv.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv.minMaxLoc(lure_location)
-        if np.any(lure_location >= 0.69):
+        if np.any(lure_location >= 0.55):
             # Save the lure's top-left location
             self.lure_location = max_loc
             self.state = FishingState.MOVE_TO_LURE
             pass
         else:
+            delay = random.uniform(2, 4)
+            time.sleep(delay)
             self.state = FishingState.BAIT
             pass
-        
 
     def move_to_lure(self):
         while not self.stop_event.is_set():    
@@ -692,6 +693,8 @@ class FishingAgent:
             # Detect motion if change percentage exceeds the sensitivity threshold
             if change_percentage > sensitivity_threshold:
                 print(f"State: PULL_LINE - Motion detected: {change_percentage:.2f}% of the template area has changed.")
+                delay = random.uniform(0.25, 0.9)
+                time.sleep(delay)
                 bite_detected = True
                 break
 
@@ -716,10 +719,10 @@ class FishingAgent:
     def pull_line(self):
         self.mouse_operation(click="right")
         time.sleep(1)
-        screen_width, screen_height = pyautogui.size()
-        screen_x = screen_width // 2
-        screen_y = screen_height // 2
-        self.mouse_operation(end=(screen_x, screen_y))
+        # screen_width, screen_height = pyautogui.size()
+        # screen_x = screen_width // 2
+        # screen_y = screen_height // 2
+        # self.mouse_operation(end=(screen_x, screen_y))
         self.state = FishingState.TRASH
         pass
 
