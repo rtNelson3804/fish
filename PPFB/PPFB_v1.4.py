@@ -76,7 +76,7 @@ Make sure you have enough bait in your bags and your fishing pole equipped.
 
 1. Start Screen Capture
 
-2. Start Fishing (5 second delay)
+2. Start Fishing (15 second delay)
 
 3. Maximize WoW window.                 
 *************************************************************************
