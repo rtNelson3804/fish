@@ -474,6 +474,12 @@ class FishingAgent:
         print()
         time.sleep(1)
 
+        def is_nearby(loc, clicked_locations, radius=10):
+            for clicked_x, clicked_y in clicked_locations:
+                if abs(clicked_x - loc[0]) <= radius and abs(clicked_y - loc[1]) <= radius:
+                    return True
+            return False
+
         click_templates = {
             'clam': self.clam_target,
             'crate': self.crate_target,
@@ -489,7 +495,7 @@ class FishingAgent:
                     clam_x = loc[0] + self.clam_target.shape[1] // 2
                     clam_y = loc[1] + self.clam_target.shape[0] // 2
                 # Check if the location has already been clicked
-                    if (clam_x, clam_y) not in clicked_locations:
+                    if not is_nearby((clam_x, clam_y), clicked_locations):
                         click_counts[name] += 1
                         # Click in the center of the image
                         self.mouse_operation(end=(clam_x, clam_y), click="right")
@@ -507,12 +513,6 @@ class FishingAgent:
             'grouper': self.grouper_target,
             'chest': self.chest_target
         }
-
-        def is_nearby(loc, clicked_locations, radius=10):
-            for clicked_x, clicked_y in clicked_locations:
-                if abs(clicked_x - loc[0]) <= radius and abs(clicked_y - loc[1]) <= radius:
-                    return True
-            return False
 
         # Initialize counters for each type of fish
         counts = {name: 0 for name in templates.keys()}
@@ -710,7 +710,7 @@ class FishingAgent:
             self.lure_location = self.small_location
         matched_region_previous = None
         bite_detected = False
-        sensitivity_threshold = 20  # Percentage of changed pixels to detect motion
+        sensitivity_threshold = 25  # Percentage of changed pixels to detect motion
         gaussian_blur_size = (3, 3)  # Small blur to reduce noise
         time_start = time.time()
 
@@ -779,10 +779,15 @@ class FishingAgent:
     def pull_line(self):
         self.mouse_operation(click="right")
         time.sleep(1.5)
-        # screen_width, screen_height = pyautogui.size()
-        # screen_x = screen_width // 2
-        # screen_y = screen_height // 2
-        # self.mouse_operation(end=(screen_x, screen_y))
+        screen_width, screen_height = pyautogui.size()
+        screen_x = screen_width // 2
+        screen_y = screen_height // 2
+        # Generate random offsets in the range of -50 to +50 pixels
+        offset_x = random.randint(-50, 50)
+        offset_y = random.randint(-50, 50)
+        random_x = screen_x + offset_x
+        random_y = screen_y + offset_y
+        self.mouse_operation(end=(random_x, random_y))
         self.state = FishingState.TRASH
         pass
 
