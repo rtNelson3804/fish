@@ -419,46 +419,10 @@ class FishingAgent:
                 "assets", "clam_target.png"
             )
         )
-        self.yellowtail_target = cv.imread(
-            os.path.join(
-                here_path,
-                "assets", "yellowtail_target.png"
-            )
-        )
         self.yes_target = cv.imread(
             os.path.join(
                 here_path,
                 "assets", "yes_target.png"
-            )
-        )
-        self.mightfish_target = cv.imread(
-            os.path.join(
-                here_path,
-                "assets", "mightfish_target.png"
-            )
-        )
-        self.cod_target = cv.imread(
-            os.path.join(
-                here_path,
-                "assets", "cod_target.png"
-            )
-        )
-        self.zesty_target = cv.imread(
-            os.path.join(
-                here_path,
-                "assets", "zesty_target.png"
-            )
-        )
-        self.firefin_target = cv.imread(
-            os.path.join(
-                here_path,
-                "assets", "firefin_target.png"
-            )
-        )
-        self.grouper_target = cv.imread(
-            os.path.join(
-                here_path,
-                "assets", "grouper_target.png"
             )
         )
         self.crate_target = cv.imread(
