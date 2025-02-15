@@ -155,7 +155,7 @@ Update v1.41
 
         tk.Label(trash_delay_frame, text="Trash Fish (Minutes):").pack(side=tk.LEFT)
         self.trash_delay_frame_entry = tk.Entry(trash_delay_frame, width=3)
-        self.trash_delay_frame_entry.insert(0, "30")  # default value
+        self.trash_delay_frame_entry.insert(0, "10")  # default value
         self.trash_delay_frame_entry.pack(side=tk.LEFT)
 
         fishing_time_frame = tk.Frame(input_frame)
@@ -494,7 +494,6 @@ class FishingAgent:
     def trashing_fish(self):
         # Initialize a set to store the clicked locations
         clicked_locations = set()
-        clam_count = 0
         # Find the clam_target image on the screen
         print()
         print("Opening Bags to clear inventory...")
@@ -512,27 +511,24 @@ class FishingAgent:
 
         click_templates = {
             'clam': self.clam_target,
-            'crate': self.crate_target,
-        }
-        click_counts = {name: 0 for name in click_templates.keys()}        
+            'crate': self.crate_target
+        }       
         # Iterate over the locations where the image was found
         for name, template in click_templates.items():
             click_result = cv.matchTemplate(self.main_agent.cur_img, template, cv.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv.minMaxLoc(click_result)
-            if np.any(click_result >= 0.9):
-                for loc in zip(*np.where(click_result >= 0.9)[::-1]):
-                    # Calculate the center of the image
-                    clam_x = loc[0] + self.clam_target.shape[1] // 2
-                    clam_y = loc[1] + self.clam_target.shape[0] // 2
+            if np.any(click_result >= 0.8):
+                print(f"{name} found!")
+                for loc in zip(*np.where(click_result >= 0.75)[::-1]):  # Lower threshold
+                    x = loc[0] + template.shape[1] // 2
+                    y = loc[1] + template.shape[0] // 2
                 # Check if the location has already been clicked
-                    if not is_nearby((clam_x, clam_y), clicked_locations):
-                        click_counts[name] += 1
-                        # Click in the center of the image
-                        self.mouse_operation(end=(clam_x, clam_y), click="right")
-                        # Add the location to the set of clicked locations
-                        time.sleep(1)
-                        clicked_locations.add((clam_x, clam_y))
-
+                    if not is_nearby((x, y), clicked_locations):
+                        self.mouse_operation(end=(x, y), click="right")
+                        time.sleep(0.5)  # Give time for UI update
+                        clicked_locations.add((x, y))
+            else:
+                    print(f"{name} NOT found!")
         # Define a dictionary with templates and their names
         templates = {
             'zesty': self.zesty_target,
@@ -543,10 +539,6 @@ class FishingAgent:
             'grouper': self.grouper_target,
             'chest': self.chest_target
         }
-
-        # Initialize counters for each type of fish
-        counts = {name: 0 for name in templates.keys()}
-
         # Iterate over the templates
         for name, template in templates.items():
             pick_open_boxes = self.pick_open_boxes_checkbox_var.get()
@@ -564,8 +556,6 @@ class FishingAgent:
                         
                         # Check if the location has already been clicked
                         if (x, y) not in clicked_locations:
-                            # counts[name] += 1
-                            
                             # Click in the center of the image
                             pyautogui.press(lock_key)
                             self.mouse_operation(end=(x, y), click="left")
@@ -582,8 +572,6 @@ class FishingAgent:
                     
                     # Check if the location has already been clicked
                     if not is_nearby((x, y), clicked_locations) and name != 'chest':
-                        counts[name] += 1
-                        
                         # Click in the center of the image
                         self.mouse_operation(end=(x, y), click="left")
                         time.sleep(0.3)
@@ -706,6 +694,8 @@ class FishingAgent:
         else:
             delay = random.uniform(2, 4)
             time.sleep(delay)
+            self.fails += 1
+            self.root.after(0, self.gui.update_fails, self.fails)
             self.state = FishingState.BAIT
             pass
 
@@ -741,7 +731,7 @@ class FishingAgent:
             self.lure_location = self.small_location
         matched_region_previous = None
         bite_detected = False
-        sensitivity_threshold = 25  # Percentage of changed pixels to detect motion
+        sensitivity_threshold = 26  # Percentage of changed pixels to detect motion
         gaussian_blur_size = (3, 3)  # Small blur to reduce noise
         time_start = time.time()
 
@@ -795,8 +785,6 @@ class FishingAgent:
             # Timeout after 26 seconds
             if time.time() - time_start >= 26:
                 print("State: PULL_LINE - Failed to see a bite...")
-                self.fails += 1
-                self.root.after(0, self.gui.update_fails, self.fails)
                 bite_detected = True
                 break
 
