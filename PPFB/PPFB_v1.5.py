@@ -96,18 +96,18 @@ Update v1.5
             "Firefin_Snapper": "firefin_target.png",
             "Grouper": "grouper_target.png",
             "Winter_Squid": "winter_target.png",
+            "Small_Lustrous_Pearl": "lustrous_target.png",
             "Blasting_Powder": "blasting_target.png",
             "Mithril_Casing": "mithril_target.png",
             "Mithril_Cylinder": "cylinder_target.png",
             "Chest": "chest_target.png"
-            
         }
         
         self.selected_trash_items = {}
 
         # Initialize trash_options here so it always exists
         self.trash_options = {
-            label: tk.IntVar(value=(1 if label in ["Spotted_Yellowtail", "Glossy_Mightfish", "Rockscale_Cod", "Firefin_Snapper", "Cod", "Zesty_Clam_Meat", "Firefin_Snapper", "Grouper", "Blasting_Powder"] else 0))
+            label: tk.IntVar(value=(1 if label in ["Spotted_Yellowtail", "Glossy_Mightfish", "Rockscale_Cod", "Firefin_Snapper", "Zesty_Clam_Meat", "Firefin_Snapper", "Grouper", "Small_Lustrous_Pearl", "Blasting_Powder"] else 0))
             for label in self.asset_paths.keys()
         }
         
