@@ -507,8 +507,6 @@ class FishingAgent:
     def trashing_fish(self):
         # Initialize a set to store the clicked locations
         clicked_locations = set()
-        # Find the clam_target image on the screen
-        print(self.selected_trash_items)
         print()
         print("Opening Bags to clear inventory...")
         time.sleep(1)
@@ -541,8 +539,6 @@ class FishingAgent:
                         self.mouse_operation(end=(x, y), click="right")
                         time.sleep(0.5)  # Give time for UI update
                         clicked_locations.add((x, y))
-            else:
-                    print(f"{name} NOT found!")
 
         # Iterate over the templates
         here_path = os.path.dirname(os.path.abspath(__file__))
