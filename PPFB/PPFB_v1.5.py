@@ -11,6 +11,7 @@ import os
 import threading
 import enum
 import random
+from tkinter import Toplevel
 
 FPS_REPORT_DELAY = 0.25
 
@@ -59,7 +60,7 @@ class FishingState(enum.Enum):
 class GUI:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("PPFB v1.41")
+        self.root.title("PPFB v1.5")
 
         self.text_area = scrolledtext.ScrolledText(self.root, width=75, height=15)
         self.text_area.pack()
@@ -68,11 +69,14 @@ class GUI:
         self.text_area.insert(tk.INSERT, """
 *************************************************************************
 """)
-        self.text_area.insert(tk.INSERT, "Primary's Pixel Fishing Bot v1.41\n", ('bold_underline', 'center'))
+        self.text_area.insert(tk.INSERT, "Primary's Pixel Fishing Bot v1.5\n", ('bold_underline', 'center'))
         self.text_area.insert(tk.INSERT, """
 Update v1.41
     - Fixed Trying to open the same clam/crate spot twice.
     - Added an updating Casts/Fails in the gui instead of printing.
+                              
+Update v1.5
+    - Added Options Menu, and Trash Menu.
 
 1. Start Screen Capture
 
@@ -81,6 +85,36 @@ Update v1.41
 3. Maximize WoW window.                 
 *************************************************************************
 """)
+        self.options_button = tk.Button(self.root, text="Options", command=self.open_options_window)
+        self.options_button.pack(side=tk.BOTTOM, anchor=tk.E, padx=10, pady=10)
+
+        self.asset_paths = {
+            "Spotted_Yellowtail": "yellowtail_target.png",
+            "Glossy_Mightfish": "mightfish_target.png",
+            "Rockscale_Cod": "cod_target.png",
+            "Zesty_Clam_Meat": "zesty_target.png",
+            "Firefin_Snapper": "firefin_target.png",
+            "Grouper": "grouper_target.png",
+            "Winter_Squid": "winter_target.png",
+            "Blasting_Powder": "blasting_target.png",
+            "Mithril_Casing": "mithril_target.png",
+            "Mithril_Cylinder": "cylinder_target.png",
+            "Chest": "chest_target.png"
+            
+        }
+        
+        self.selected_trash_items = {}
+
+        # Initialize trash_options here so it always exists
+        self.trash_options = {
+            label: tk.IntVar(value=(1 if label in ["Spotted_Yellowtail", "Glossy_Mightfish", "Rockscale_Cod", "Firefin_Snapper", "Cod", "Zesty_Clam_Meat", "Firefin_Snapper", "Grouper", "Blasting_Powder"] else 0))
+            for label in self.asset_paths.keys()
+        }
+        
+        self.human_mouse_checkbox_var = tk.IntVar(value=1)
+        self.trash_fish_checkbox_var = tk.IntVar(value=1)
+        self.bait_checkbox_var = tk.IntVar(value=1)
+        self.pick_open_boxes_checkbox_var = tk.IntVar(value=0)
 
         # Create a main frame to hold both left and right stats
         main_stats_frame = tk.Frame(self.root)
@@ -111,25 +145,6 @@ Update v1.41
         
         self.total_casts = 0
         self.total_fails = 0
-
-        checkbox_frame = tk.Frame(self.root)
-        checkbox_frame.pack(side=tk.RIGHT)
-
-        self.human_mouse_checkbox_var = tk.IntVar(value=1)
-        self.human_mouse_checkbox = tk.Checkbutton(checkbox_frame, text="Human Mouse", variable=self.human_mouse_checkbox_var)
-        self.human_mouse_checkbox.pack(side=tk.TOP)
-
-        self.trash_fish_checkbox_var = tk.IntVar(value=1)
-        self.trash_fish_checkbox = tk.Checkbutton(checkbox_frame, text="Trash Fish", variable=self.trash_fish_checkbox_var)
-        self.trash_fish_checkbox.pack(side=tk.TOP)
-
-        self.bait_checkbox_var = tk.IntVar(value=1)
-        self.bait_checkbox = tk.Checkbutton(checkbox_frame, text="Bait", variable=self.bait_checkbox_var)
-        self.bait_checkbox.pack(side=tk.TOP)
-
-        self.pick_open_boxes_checkbox_var = tk.IntVar(value=0)
-        self.pick_open_boxes_checkbox = tk.Checkbutton(checkbox_frame, text="Pick/Open Boxes", variable=self.pick_open_boxes_checkbox_var)
-        self.pick_open_boxes_checkbox.pack(side=tk.TOP)
 
         input_frame = tk.Frame(self.root)
         input_frame.pack(side=tk.LEFT)
@@ -184,7 +199,39 @@ Update v1.41
         self.screen_capture_thread = None
         self.fishing_agent_thread = None
 
+        # Ensure `self.selected_trash_items` is populated on startup
+        self.update_selected_trash()
+
+    def open_options_window(self):
+        options_window = Toplevel(self.root)
+        options_window.title("Options")
+        options_window.geometry("200x200")
+
+        tk.Checkbutton(options_window, text="Human Mouse", variable=self.human_mouse_checkbox_var).pack(anchor="w")
+        tk.Checkbutton(options_window, text="Trash Fish", variable=self.trash_fish_checkbox_var).pack(anchor="w")
+        tk.Checkbutton(options_window, text="Bait", variable=self.bait_checkbox_var).pack(anchor="w")
+        tk.Checkbutton(options_window, text="Pick/Open Boxes", variable=self.pick_open_boxes_checkbox_var).pack(anchor="w")
+
+        trash_button = tk.Button(options_window, text="Trash Menu", command=self.open_trash_window)
+        trash_button.pack(side=tk.BOTTOM, anchor="w", padx=5, pady=5)
+
+    def open_trash_window(self):
+        trash_window = Toplevel(self.root)
+        trash_window.title("Trash Options")
+        trash_window.geometry("250x300")
+
+        # ✅ Do NOT reinitialize self.trash_options here!
+        # Use the existing trash_options instead
+        for label, var in self.trash_options.items():
+            tk.Checkbutton(trash_window, text=label, variable=var, command=self.update_selected_trash).pack(anchor="w")
+    
+    def update_selected_trash(self):
+        self.selected_trash_items = {
+            label: filename for label, filename in self.asset_paths.items() if self.trash_options[label].get() == 1
+        }
+
     def update_casts(self, casts):
+        self.update_selected_trash()
         self.total_casts = casts
         self.casts_label.config(text=f"Total Casts: {self.total_casts} ")
     
@@ -277,7 +324,8 @@ Update v1.41
     def initialize_fishing_agent(self):
         self.fishing_agent = FishingAgent(self, self.main_agent, self.bait_checkbox_var, self.root, self.fishing_key_entry, 
                                           self.trash_fish_checkbox_var, self.pick_lock_key_entry, self.pick_open_boxes_checkbox_var,
-                                          self.trash_delay_frame_entry, self.human_mouse_checkbox_var, self.fishing_time_frame_entry
+                                          self.trash_delay_frame_entry, self.human_mouse_checkbox_var, self.fishing_time_frame_entry,
+                                          self.selected_trash_items
                                           )
         self.fishing_agent_thread = Thread(target=self.fishing_agent.run)
         self.fishing_agent_thread.start()
@@ -320,7 +368,7 @@ Update v1.41
         stop_thread.start()
 
 class FishingAgent:
-    def __init__(self, gui, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var, pick_lock_key_entry, pick_open_boxes_checkbox_var, trash_delay_frame_entry, human_mouse_checkbox_var, fishing_time_frame_entry):
+    def __init__(self, gui, main_agent, bait_checkbox_var, root, fishing_key_entry, trash_fish_checkbox_var, pick_lock_key_entry, pick_open_boxes_checkbox_var, trash_delay_frame_entry, human_mouse_checkbox_var, fishing_time_frame_entry, selected_trash_items):
         self.main_agent = main_agent
         self.gui = gui
         self.state = FishingState.BAIT
@@ -332,6 +380,7 @@ class FishingAgent:
         self.fishing_time_frame_entry = fishing_time_frame_entry
         self.trash_fish_checkbox_var = trash_fish_checkbox_var
         self.pick_open_boxes_checkbox_var = pick_open_boxes_checkbox_var
+        self.selected_trash_items = selected_trash_items
         self.human_mouse_checkbox_var = human_mouse_checkbox_var
         self.human_mouse = self.human_mouse_checkbox_var.get()
         self.stop_event = threading.Event()
@@ -421,7 +470,7 @@ class FishingAgent:
         self.chest_target = cv.imread(
             os.path.join(
                 here_path,
-                "assets", "chest_target.png"
+                "assets", "chestpick_target.png"
             )
         )
         self.fishing_thread = None
@@ -495,6 +544,7 @@ class FishingAgent:
         # Initialize a set to store the clicked locations
         clicked_locations = set()
         # Find the clam_target image on the screen
+        print(self.selected_trash_items)
         print()
         print("Opening Bags to clear inventory...")
         time.sleep(1)
@@ -529,26 +579,29 @@ class FishingAgent:
                         clicked_locations.add((x, y))
             else:
                     print(f"{name} NOT found!")
-        # Define a dictionary with templates and their names
-        templates = {
-            'zesty': self.zesty_target,
-            'yellowtail': self.yellowtail_target,
-            'mightfish': self.mightfish_target,
-            'cod': self.cod_target,
-            'firefin': self.firefin_target,
-            'grouper': self.grouper_target,
-            'chest': self.chest_target
-        }
+
         # Iterate over the templates
-        for name, template in templates.items():
-            pick_open_boxes = self.pick_open_boxes_checkbox_var.get()
-            # Find the template on the screen
+        here_path = os.path.dirname(os.path.abspath(__file__))
+        for name, filename in self.selected_trash_items.items():
+            template_path = os.path.join(here_path, "assets", filename)
+            
+            if not os.path.exists(template_path):
+                print(f"Error: Template {template_path} does not exist!")
+                continue
+            
+            template = cv.imread(template_path)
+
+            if template is None:
+                print(f"Error: Failed to load {template_path}")
+                continue
+
             result = cv.matchTemplate(self.main_agent.cur_img, template, cv.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
+            pick_open_boxes = self.pick_open_boxes_checkbox_var.get()
             lock_key = self.pick_lock_key_entry.get()
             # If the template is found, perform the actions
             if np.any(result >= 0.9):
-                if name == 'chest' and pick_open_boxes == 1:
+                if name == 'chestpick' and pick_open_boxes == 1:
                     for loc in zip(*np.where(result >= 0.9)[::-1]):
                         # Calculate the center of the image
                         x = loc[0] + template.shape[1] // 2
@@ -571,7 +624,7 @@ class FishingAgent:
                     y = loc[1] + template.shape[0] // 2
                     
                     # Check if the location has already been clicked
-                    if not is_nearby((x, y), clicked_locations) and name != 'chest':
+                    if not is_nearby((x, y), clicked_locations):
                         # Click in the center of the image
                         self.mouse_operation(end=(x, y), click="left")
                         time.sleep(0.3)
